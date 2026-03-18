@@ -745,68 +745,83 @@ function getVideoSequenceForGroup(group) {
     startNextTrialBtn.addEventListener('click', () => runTrial(currentTrialIndex));
 
     function runTrial(index) {
-        const trialInfo = videoSequence[index];
-        experimentData.trials[index] = {
-            videoTopic: trialInfo.topic,
-            url: trialInfo.url,
-            delay: trialInfo.delay,
-            spacebarTimestamps: [],
-            questionnaire: {}
-        };
+    const trialInfo = videoSequence[index];
 
-        videoTopicHeader.textContent = `Video: ${trialInfo.topic}`;
-        experimentVideo.src = trialInfo.url;
-        experimentVideo.load();
-        showView('videoView');
+    experimentData.trials[index] = {
+        videoTopic: trialInfo.topic,
+        url: trialInfo.url,
+        delay: trialInfo.delay,
+        spacebarTimestamps: [],
+        questionnaire: {}
+    };
 
-        experimentVideo.controls = false;
-        const customPlayPauseBtn = document.getElementById('main-play-pause-btn');
-        const mainTimeline = document.getElementById('main-timeline');
-        const mainProgress = document.getElementById('main-progress');
-        const mainTimeDisplay = document.getElementById('main-time');
+    videoTopicHeader.textContent = `Video: ${trialInfo.topic}`;
 
-        // Clear any existing bubbles from previous trials
-        const existingBubbles = mainTimeline.querySelectorAll('.bubble');
-        existingBubbles.forEach(bubble => bubble.remove());
+    // SET VIDEO SOURCE
+    experimentVideo.src = trialInfo.url;
+    experimentVideo.load();
 
-        // NEW: Set up progress tracking for main video
-        experimentVideo.addEventListener('loadedmetadata', () => {
-            updateVideoProgress(experimentVideo, mainProgress, mainTimeDisplay);
-        });
-        
-        experimentVideo.addEventListener('timeupdate', () => {
-            updateVideoProgress(experimentVideo, mainProgress, mainTimeDisplay);
-        });
+    showView('videoView');
 
-        const mainPlayPauseHandler = () => {
-            if (experimentVideo.paused) {
-                experimentVideo.addEventListener('loadeddata', () => {
-                    experimentVideo.play().catch(err => console.warn("Play failed:", err));
-                });
-                customPlayPauseBtn.textContent = '⏸';
-            } else {
-                experimentVideo.pause();
-                customPlayPauseBtn.textContent = '▶';
-            }
-        };
-        customPlayPauseBtn.addEventListener('click', mainPlayPauseHandler);
+    experimentVideo.controls = false;
 
-        const onVideoEnd = () => {
-            isExitingFullscreenManually = true;
-            if (document.fullscreenElement) document.exitFullscreen();
-            customPlayPauseBtn.removeEventListener('click', mainPlayPauseHandler);
-            experimentVideo.removeEventListener('ended', onVideoEnd);
-            // Log stored timestamps for the trial
-            console.log(`Final stored SPACE timestamps for trial ${index + 1} (s):`, experimentData.trials[index].spacebarTimestamps);
-            displayQuestionnaireForTrial(trialInfo);
-            /*showView('questionnaireView');*/
-        };
-        experimentVideo.addEventListener('ended', onVideoEnd);
+    const customPlayPauseBtn = document.getElementById('main-play-pause-btn');
+    const mainTimeline = document.getElementById('main-timeline');
+    const mainProgress = document.getElementById('main-progress');
+    const mainTimeDisplay = document.getElementById('main-time');
 
-        experimentVideo.parentElement.requestFullscreen().catch(err => console.error("Fullscreen error:", err));
-        experimentVideo.play().catch(err => console.warn("Autoplay play failed:", err));
-        customPlayPauseBtn.textContent = '⏸';
-    }
+    // CLEAR OLD BUBBLES
+    const existingBubbles = mainTimeline.querySelectorAll('.bubble');
+    existingBubbles.forEach(bubble => bubble.remove());
+
+    // PROGRESS TRACKING
+    experimentVideo.onloadedmetadata = () => {
+        updateVideoProgress(experimentVideo, mainProgress, mainTimeDisplay);
+    };
+
+    experimentVideo.ontimeupdate = () => {
+        updateVideoProgress(experimentVideo, mainProgress, mainTimeDisplay);
+    };
+
+    // ✅ CLEAN PLAY BUTTON (NO EVENT NESTING)
+    const mainPlayPauseHandler = () => {
+        if (experimentVideo.paused) {
+            experimentVideo.play()
+                .then(() => console.log("Playback started"))
+                .catch(err => console.warn("Play failed:", err));
+
+            customPlayPauseBtn.textContent = '⏸';
+        } else {
+            experimentVideo.pause();
+            customPlayPauseBtn.textContent = '▶';
+        }
+    };
+
+    customPlayPauseBtn.onclick = mainPlayPauseHandler;
+
+    // VIDEO END HANDLING
+    experimentVideo.onended = () => {
+        isExitingFullscreenManually = true;
+
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+
+        console.log(`Final timestamps trial ${index + 1}:`,
+            experimentData.trials[index].spacebarTimestamps);
+
+        displayQuestionnaireForTrial(trialInfo);
+    };
+
+    // ⚠️ IMPORTANT: TRY WITHOUT FULLSCREEN FIRST
+    /*
+    experimentVideo.parentElement.requestFullscreen()
+        .catch(err => console.error("Fullscreen error:", err));
+    */
+
+    // ❌ NO AUTOPLAY HERE
+    customPlayPauseBtn.textContent = '▶';
+}
 
     function displayQuestionnaireForTrial(trialInfo) {
         const setLetter = trialInfo.url.split('/')[1] ? trialInfo.url.split('/')[1][0].toUpperCase() : 'A';
